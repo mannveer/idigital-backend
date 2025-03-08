@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import multer from 'multer';
 import path from 'path';
 import { config } from 'dotenv';
+import cors from 'cors';
 import { ProductController } from './controllers/product.controller';
 import { auth, handleUploadError } from './middleware';
 import { storage } from './services/storage';
@@ -14,6 +15,14 @@ config();
 
 // Create Express app
 const app = express();
+
+// Configure CORS
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? process.env.FRONTEND_URL 
+    : ['http://localhost:4200', 'http://127.0.0.1:4200'],
+  credentials: true
+}));
 
 // Configure multer for file uploads
 const upload = multer({
