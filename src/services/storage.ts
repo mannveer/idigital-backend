@@ -1,7 +1,8 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { AppError } from '../middleware/error';
+import { AppError } from '../utils/AppError';
+import { LocalStorageService } from './storage/LocalStorageService';
 
 class StorageService {
   private uploadDir: string;
@@ -49,4 +50,5 @@ class StorageService {
   }
 }
 
-export const storage = new StorageService(); 
+// Initialize storage service
+export const storage = new LocalStorageService(); 

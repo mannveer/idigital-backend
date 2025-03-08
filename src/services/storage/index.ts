@@ -1,21 +1,10 @@
-import { IStorageService } from './IStorageService';
+import { StorageService } from './StorageService';
 import { LocalStorageService } from './LocalStorageService';
 import config from '../../config';
 
 export * from './IStorageService';
 
-let storageService: IStorageService;
+// Initialize storage service
+const storage: StorageService = new LocalStorageService();
 
-export function getStorageService(): IStorageService {
-  if (!storageService) {
-    switch (config.storage.provider) {
-      case 'local':
-      default:
-        storageService = new LocalStorageService();
-        break;
-    }
-  }
-  return storageService;
-}
-
-export const storage = getStorageService(); 
+export { storage }; 

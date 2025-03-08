@@ -1,26 +1,32 @@
 import { Request, Response, NextFunction } from 'express';
 import { MongoError } from 'mongodb';
 import mongoose from 'mongoose';
-
-export class AppError extends Error {
-  statusCode: number;
-  status: string;
-
-  constructor(message: string, statusCode: number) {
-    super(message);
-    this.statusCode = statusCode;
-    this.status = `${statusCode}`.startsWith('4') ? 'fail' : 'error';
-
-    Error.captureStackTrace(this, this.constructor);
-  }
-}
+import { AppError } from '../utils/AppError';
 
 export function notFound(req: Request, res: Response, next: NextFunction) {
   const error = new AppError(`Not Found - ${req.originalUrl}`, 404);
   next(error);
 }
 
-export function errorHandler(
+export const errorHandler = (
+  err: Error | AppError,
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const statusCode = (err as AppError).statusCode || 500;
+  const status = (err as AppError).status || 'error';
+
+  res.status(statusCode).json({
+    status,
+    error: {
+      message: err.message,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    }
+  });
+};
+
+export function errorHandlerMongo(
   err: Error | AppError | MongoError,
   req: Request,
   res: Response,

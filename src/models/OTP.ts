@@ -1,46 +1,51 @@
-import mongoose, { Document, Schema } from 'mongoose';
+import mongoose, { Document, Model, Schema } from 'mongoose';
+import crypto from 'crypto';
 
 export interface IOTP extends Document {
   value: string;
-  otp: string;
-  type: 'email' | 'phone';
-  expiresAt: Date;
+  type: 'email' | 'sms';
+  destination: string;
   verified: boolean;
-  createdAt: Date;
+  expiresAt: Date;
+  markVerified(): Promise<void>;
 }
 
-const otpSchema = new Schema({
+interface IOTPModel extends Model<IOTP> {
+  generateOTP(): string;
+}
+
+const otpSchema = new Schema<IOTP>({
   value: {
     type: String,
-    required: [true, 'Email or phone is required'],
-    trim: true
-  },
-  otp: {
-    type: String,
-    required: [true, 'OTP is required'],
-    trim: true,
-    length: [6, 'OTP must be 6 characters long']
+    required: true,
+    default: function() {
+      return (this.constructor as IOTPModel).generateOTP();
+    }
   },
   type: {
     type: String,
-    enum: ['email', 'phone'],
-    required: [true, 'Type is required']
+    required: true,
+    enum: ['email', 'sms']
   },
-  expiresAt: {
-    type: Date,
-    required: [true, 'Expiry time is required'],
-    index: { expires: 0 }
+  destination: {
+    type: String,
+    required: true
   },
   verified: {
     type: Boolean,
     default: false
+  },
+  expiresAt: {
+    type: Date,
+    required: true,
+    default: function() {
+      return new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    }
   }
-}, {
-  timestamps: true
 });
 
 // Indexes for quick lookups and cleanup
-otpSchema.index({ value: 1, otp: 1 });
+otpSchema.index({ value: 1, type: 1 });
 otpSchema.index({ createdAt: 1 }, { expireAfterSeconds: 300 }); // 5 minutes
 
 // Methods
@@ -55,22 +60,7 @@ otpSchema.methods.markVerified = async function(): Promise<void> {
 
 // Statics
 otpSchema.statics.generateOTP = function(): string {
-  return Math.random().toString().substr(2, 6);
+  return crypto.randomInt(100000, 999999).toString();
 };
 
-otpSchema.statics.createOTP = async function(
-  value: string,
-  type: 'email' | 'phone'
-): Promise<IOTP> {
-  const otp = this.generateOTP();
-  const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-
-  return this.create({
-    value,
-    otp,
-    type,
-    expiresAt
-  });
-};
-
-export const OTP = mongoose.model<IOTP>('OTP', otpSchema); 
+export const OTP = mongoose.model<IOTP, IOTPModel>('OTP', otpSchema); 

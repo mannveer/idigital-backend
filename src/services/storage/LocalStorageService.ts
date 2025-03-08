@@ -1,29 +1,26 @@
-import fs from 'fs/promises';
-import path from 'path';
+import { StorageService, FileUploadResult } from './StorageService';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
-import { IStorageService, FileUploadResult, SignedUrlOptions } from './IStorageService';
+import { IStorageService, SignedUrlOptions } from './IStorageService';
 import config from '../../config';
-import { AppError } from '../../middleware/error';
+import { AppError } from '../../utils/AppError';
 
-export class LocalStorageService implements IStorageService {
+export class LocalStorageService implements StorageService {
   private uploadDir: string;
   private tempDir: string;
 
   constructor() {
-    this.uploadDir = config.storage.local.uploadDir;
-    this.tempDir = config.storage.local.tempDir;
+    this.uploadDir = path.join(__dirname, '../../../uploads');
+    this.tempDir = path.join(__dirname, '../../../temp');
     this.ensureDirectories();
   }
 
-  private async ensureDirectories(): Promise<void> {
-    try {
-      await fs.access(this.uploadDir);
-      await fs.access(this.tempDir);
-    } catch {
-      await fs.mkdir(this.uploadDir, { recursive: true });
-      await fs.mkdir(this.tempDir, { recursive: true });
-    }
+  private async ensureDirectories() {
+    await fs.mkdir(this.uploadDir, { recursive: true });
+    await fs.mkdir(this.tempDir, { recursive: true });
   }
 
   private generateFileId(originalname: string): string {
@@ -44,71 +41,51 @@ export class LocalStorageService implements IStorageService {
     return path.join(this.tempDir, fileId);
   }
 
-  async uploadFile(
-    file: Buffer,
-    originalname: string,
-    mimeType: string
-  ): Promise<FileUploadResult> {
-    try {
-      const fileId = this.generateFileId(originalname);
-      const filePath = this.getFilePath(fileId);
-
-      // Write file to disk
-      await fs.writeFile(filePath, file);
-
-      // Get file stats
-      const stats = await fs.stat(filePath);
-
-      return {
-        fileId,
-        url: `/uploads/${fileId}`,
-        size: stats.size,
-        mimeType
-      };
-    } catch (error) {
-      throw new AppError('Error uploading file', 500);
-    }
+  async uploadFile(file: Buffer, originalname: string, mimeType: string): Promise<FileUploadResult> {
+    const ext = path.extname(originalname);
+    const filename = `${uuidv4()}${ext}`;
+    const filePath = path.join(this.uploadDir, filename);
+    
+    await fs.writeFile(filePath, file);
+    
+    return {
+      url: `/uploads/${filename}`,
+      key: filename
+    };
   }
 
-  async getSignedUrl(
-    fileId: string,
-    options: SignedUrlOptions = {}
-  ): Promise<string> {
+  async deleteFile(fileUrl: string): Promise<void> {
+    const filename = path.basename(fileUrl);
+    const filePath = path.join(this.uploadDir, filename);
+    
     try {
-      const filePath = this.getFilePath(fileId);
-      await fs.access(filePath);
-
-      // For local storage, we'll create a temporary copy with a random name
-      const tempId = this.generateFileId(fileId);
-      const tempPath = this.getTempPath(tempId);
-
-      // Copy file to temp directory
-      await fs.copyFile(filePath, tempPath);
-
-      // Set expiry for temp file
-      setTimeout(async () => {
-        try {
-          await fs.unlink(tempPath);
-        } catch {
-          // Ignore errors during cleanup
-        }
-      }, (options.expiresIn || 3600) * 1000);
-
-      // Return path to temp file
-      return `/temp/${tempId}`;
-    } catch (error) {
-      throw new AppError('File not found', 404);
-    }
-  }
-
-  async deleteFile(fileId: string): Promise<void> {
-    try {
-      const filePath = this.getFilePath(fileId);
       await fs.unlink(filePath);
     } catch (error) {
-      // Ignore if file doesn't exist
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        throw new AppError('Error deleting file', 500);
+        throw error;
+      }
+    }
+  }
+
+  async getSignedUrl(fileUrl: string): Promise<string> {
+    // For local storage, we just return the URL as is
+    return fileUrl;
+  }
+
+  async cleanupTempFiles(): Promise<void> {
+    const files = await fs.readdir(this.tempDir);
+    const oneHourAgo = Date.now() - 3600000;
+
+    for (const file of files) {
+      const filePath = path.join(this.tempDir, file);
+      const stats = await fs.stat(filePath);
+      
+      if (stats.mtimeMs < oneHourAgo) {
+        try {
+          await fs.unlink(filePath);
+        } catch (error) {
+          console.error(`Failed to delete temp file ${file}:`, error);
+        }
       }
     }
   }
@@ -143,29 +120,6 @@ export class LocalStorageService implements IStorageService {
       return mimeTypes[ext] || null;
     } catch {
       return null;
-    }
-  }
-
-  async cleanupTempFiles(): Promise<void> {
-    try {
-      const files = await fs.readdir(this.tempDir);
-      const now = Date.now();
-
-      for (const file of files) {
-        const filePath = path.join(this.tempDir, file);
-        const stats = await fs.stat(filePath);
-        
-        // Delete files older than 1 hour
-        if (now - stats.mtimeMs > 3600000) {
-          try {
-            await fs.unlink(filePath);
-          } catch {
-            // Ignore errors during cleanup
-          }
-        }
-      }
-    } catch {
-      // Ignore errors during cleanup
     }
   }
 

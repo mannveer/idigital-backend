@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import config from '../config';
-import { AppError } from './error';
+import { AppError } from '../utils/AppError';
 
 const storage = multer.memoryStorage();
 

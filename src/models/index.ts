@@ -1,5 +1,5 @@
-export * from './User';
-export * from './Product';
+export { User } from './User';
+export { OTP } from './OTP';
+export { Product, IProduct } from './Product';
 export * from './Purchase';
-export * from './OTP';
-export * from './product.model'; 
+// Re-export other models as needed 

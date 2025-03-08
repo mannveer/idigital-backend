@@ -6,6 +6,8 @@ import { config } from 'dotenv';
 import { ProductController } from './controllers/product.controller';
 import { auth, handleUploadError } from './middleware';
 import { storage } from './services/storage';
+import { StorageService } from './services/storage/StorageService';
+import { LocalStorageService } from './services/storage/LocalStorageService';
 
 // Load environment variables
 config();
@@ -82,11 +84,11 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   });
 });
 
-// Cleanup temporary files periodically (every hour)
-if (storage instanceof LocalStorageService) {
+// Schedule cleanup of temporary files for local storage
+if ('cleanupTempFiles' in storage) {
   setInterval(() => {
     storage.cleanupTempFiles().catch(console.error);
-  }, 3600000);
+  }, 3600000); // Run every hour
 }
 
 // Connect to MongoDB

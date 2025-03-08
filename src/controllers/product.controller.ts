@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
-import { Product } from '../models';
+import { Product } from '../models/Product';
 import { storage } from '../services/storage';
-import { AppError } from '../middleware/error';
+import { catchAsync } from '../utils/catchAsync';
+import { AppError } from '../utils/AppError';
 
 export class ProductController {
   async getProducts(req: Request, res: Response) {
@@ -76,7 +77,7 @@ export class ProductController {
       author,
       thumbnailUrl: sampleImages[0] || '',
       sampleImages,
-      fileUrl: fileResult.fileId
+      fileUrl: fileResult.url
     });
 
     res.status(201).json(product);
@@ -103,7 +104,7 @@ export class ProductController {
       await storage.deleteFile(product.fileUrl);
 
       // Update file related fields
-      updates.fileUrl = fileResult.fileId;
+      updates.fileUrl = fileResult.url;
       updates.fileType = req.file.mimetype;
       updates.fileSize = `${(req.file.size / 1024 / 1024).toFixed(2)} MB`;
     }
